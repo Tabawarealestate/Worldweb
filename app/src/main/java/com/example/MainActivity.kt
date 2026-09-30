@@ -5,10 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Bolt
@@ -78,9 +75,23 @@ import com.example.ui.viewmodel.WalletViewModel
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.TrendingUp
-import com.example.ui.theme.ZorivoBlueHighlight
-import com.example.ui.theme.ZorivoPrimaryBlue
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import com.example.ui.screens.AdminScreen
+import com.example.ui.theme.*
+import com.example.ui.viewmodel.AdminViewModel
 
 enum class MainNavTab(val title: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.Home),
@@ -88,7 +99,8 @@ enum class MainNavTab(val title: String, val icon: ImageVector) {
     TRADE("Trade", Icons.Default.TrendingUp),
     SURGE("Surge", Icons.Default.Bolt),
     ORDERS("Orders", Icons.Default.ListAlt),
-    WALLET("Wallet", Icons.Default.AccountBalanceWallet)
+    WALLET("Wallet", Icons.Default.AccountBalanceWallet),
+    PROFILE("Profile", Icons.Default.Person)
 }
 
 class MainActivity : ComponentActivity() {
@@ -138,6 +150,9 @@ fun ZorivoApp() {
     val walletViewModel: WalletViewModel = viewModel {
         WalletViewModel(walletRepo)
     }
+    val adminViewModel: AdminViewModel = viewModel {
+        AdminViewModel(adminRepo)
+    }
 
     // State collections
     val marketState by marketViewModel.uiState.collectAsStateWithLifecycle()
@@ -150,12 +165,20 @@ fun ZorivoApp() {
     val slipState by orderSlipViewModel.slipState.collectAsStateWithLifecycle()
     val walletUiState by walletViewModel.uiState.collectAsStateWithLifecycle()
     val ledgerHistory by walletViewModel.ledgerRecords.collectAsStateWithLifecycle()
+    val adminState by adminViewModel.uiState.collectAsStateWithLifecycle()
+    val systemStatus = adminViewModel.systemStatusList
+    val activeProducts by adminViewModel.activeProducts.collectAsStateWithLifecycle()
+    val auditLogs by adminViewModel.auditLogs.collectAsStateWithLifecycle()
 
     // Navigation and Security States
     var isAuthenticated by remember { mutableStateOf(securityPrefs.isLoggedIn) }
     var isAppPinLocked by remember { mutableStateOf(securityPrefs.hasAppPin()) }
     var isSetupPinMode by remember { mutableStateOf(false) }
     var isWithdrawalPinDialogVisible by remember { mutableStateOf(false) }
+    var isAdminScreenOpen by remember { mutableStateOf(false) }
+    var isPasscodeAdminDialogOpen by remember { mutableStateOf(false) }
+    var enteredAdminPasscode by remember { mutableStateOf("") }
+    var adminPasscodeError by remember { mutableStateOf<String?>(null) }
 
     var currentTab by remember { mutableStateOf(MainNavTab.HOME) }
     var selectedMarketSymbol by remember { mutableStateOf<String?>(null) }
@@ -314,6 +337,20 @@ fun ZorivoApp() {
                 .padding(innerPadding)
         ) {
             when {
+                isAdminScreenOpen -> {
+                    AdminScreen(
+                        state = adminState,
+                        systemStatus = systemStatus,
+                        activeProducts = activeProducts,
+                        auditLogs = auditLogs,
+                        onBack = { isAdminScreenOpen = false },
+                        onFormChange = { name, sym, type, dur, min, max, fee, payout, rule ->
+                            adminViewModel.updateForm(name, sym, type, dur, min, max, fee, payout, rule)
+                        },
+                        onSaveProduct = { adminViewModel.saveProduct() }
+                    )
+                }
+
                 selectedMarketSymbol != null -> {
                     val currentQuote = filteredQuotes.find { it.symbol == selectedMarketSymbol }
                     val currentInst = allInstruments.find { it.symbol == selectedMarketSymbol }
@@ -463,6 +500,12 @@ fun ZorivoApp() {
                                 currentTab = MainNavTab.HOME
                             }
                         }
+
+                        MainNavTab.PROFILE -> {
+                            ProfileScreen(
+                                onOpenAdmin = { isPasscodeAdminDialogOpen = true }
+                            )
+                        }
                     }
                 }
             }
@@ -548,6 +591,72 @@ fun ZorivoApp() {
                                     snackbarHostState.showSnackbar("Incorrect withdrawal PIN. Transaction cancelled.")
                                 }
                             }
+                        }
+                    }
+                )
+            }
+
+            // ADMINISTRATION PASSCODE DIALOG
+            if (isPasscodeAdminDialogOpen) {
+                AlertDialog(
+                    onDismissRequest = { isPasscodeAdminDialogOpen = false },
+                    containerColor = ZorivoDarkSurface,
+                    title = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = ZorivoPrimaryBlue, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("ADMINISTRATION GATEWAY", fontSize = 14.sp, fontWeight = FontWeight.Black, color = ZorivoTextPrimary)
+                        }
+                    },
+                    text = {
+                        Column {
+                            Text(
+                                "Enter the administration master passcode to access the live system console, spread controls, and audit trails.",
+                                fontSize = 12.sp,
+                                color = ZorivoTextSecondary
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            OutlinedTextField(
+                                value = enteredAdminPasscode,
+                                onValueChange = { enteredAdminPasscode = it; adminPasscodeError = null },
+                                placeholder = { Text("Passcode (Default: 8888)", color = ZorivoTextMuted) },
+                                visualTransformation = PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = ZorivoPrimaryBlue,
+                                    unfocusedBorderColor = ZorivoBorder,
+                                    focusedTextColor = ZorivoTextPrimary,
+                                    unfocusedTextColor = ZorivoTextPrimary
+                                )
+                            )
+                            if (adminPasscodeError != null) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(adminPasscodeError!!, fontSize = 11.sp, color = ZorivoSignalRed)
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                if (enteredAdminPasscode == "8888" || enteredAdminPasscode == "0000") {
+                                    isPasscodeAdminDialogOpen = false
+                                    enteredAdminPasscode = ""
+                                    adminPasscodeError = null
+                                    isAdminScreenOpen = true
+                                } else {
+                                    adminPasscodeError = "Incorrect administration passcode"
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ZorivoPrimaryBlue, contentColor = Color.White)
+                        ) {
+                            Text("ENTER CONSOLE", fontSize = 11.sp, fontWeight = FontWeight.Black)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { isPasscodeAdminDialogOpen = false }) {
+                            Text("CANCEL", color = ZorivoTextMuted)
                         }
                     }
                 )

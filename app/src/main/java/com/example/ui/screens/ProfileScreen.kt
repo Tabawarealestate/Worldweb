@@ -64,8 +64,17 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import com.example.ui.theme.ZorivoBlueHighlight
+import com.example.ui.theme.ZorivoPrimaryBlue
+import com.example.ui.theme.ZorivoTextMuted
+import com.example.ui.theme.ZorivoTextPrimary
+
 @Composable
-fun ProfileScreen() {
+fun ProfileScreen(
+    onOpenAdmin: () -> Unit = {}
+) {
     val clipboardManager: ClipboardManager = LocalClipboardManager.current
     var copiedCodeToast by remember { mutableStateOf(false) }
     var rewardsClaimed by remember { mutableStateOf(false) }
@@ -73,8 +82,8 @@ fun ProfileScreen() {
     val referral = remember {
         ReferralProfile(
             referralId = "REF-84920",
-            referralCode = "NEXIS-PRO-984",
-            referralLink = "https://nexismarkets.trade/ref/NEXIS-PRO-984",
+            referralCode = "ZORIVO-PRO-984",
+            referralLink = "https://zorivo.com/ref/ZORIVO-PRO-984",
             invitedUsersCount = 14,
             activeReferralsCount = 9,
             pendingRewardsUsd = 45.0,
@@ -324,6 +333,34 @@ fun ProfileScreen() {
                 RiskRow("Maximum Open Positions", "10 Positions")
                 Spacer(modifier = Modifier.height(6.dp))
                 RiskRow("Withdrawal Review Threshold", "$2,000 USD")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // ADMINISTRATION & SYSTEM CONTROL PORTAL
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onOpenAdmin() },
+            shape = RoundedCornerShape(12.dp),
+            color = TerminalSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, ZorivoPrimaryBlue.copy(alpha = 0.5f))
+        ) {
+            Row(
+                modifier = Modifier.padding(14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AdminPanelSettings, contentDescription = "Admin", tint = ZorivoPrimaryBlue, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text("ADMINISTRATION PORTAL", fontSize = 12.sp, fontWeight = FontWeight.Black, color = ZorivoTextPrimary)
+                        Text("Live market spreads, system health, and ledger audit", fontSize = 10.sp, color = ZorivoTextMuted)
+                    }
+                }
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, tint = ZorivoBlueHighlight, modifier = Modifier.size(16.dp))
             }
         }
 
